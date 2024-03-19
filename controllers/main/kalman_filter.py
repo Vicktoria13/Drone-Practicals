@@ -24,7 +24,7 @@ class kalman_filter():
         self.use_noisy_measurement = False
 
         # Simulation time after which plots are generated
-        self.plot_time_limit = 30.0
+        self.plot_time_limit = 20.0
 
         # ---------------------------------- DO NOT MODIFY ---------------------------------
         #Variables for Plotting
@@ -47,10 +47,10 @@ class kalman_filter():
     
     def initialize_KF(self, noise_std_GPS, noise_std_ACCEL):
         # Function to initialize the following:
-        #   Optimal state vector (self.X_opt)
-        #   Optimal prediction covariance (self.P_opt)
-        #   Measurement Matrices (self.H_GPS and self.H_ACCEL)
-        #   Measurement Covariance Matrices (self.R_GPS and self.R_ACCEL)
+        #   Optimal state vector (self.X_opt) (DIM: n_states x 1)
+        #   Optimal prediction covariance (self.P_opt) (DIM: n_states x n_states)
+        #   Measurement Matrices for GPS and Accelerometer (self.H_GPS and self.H_ACCEL) (DIM: n_measurements x n_states)
+        #   Measurement Covariance Matrices (self.R_GPS and self.R_ACCEL) (DIM: n_measurements x n_states)
 
         # IMPORTANT: Assume the state definition in the order: X = [x, v_x, a_x, y, v_y, a_y, z, v_z, a_z], Shape: (9,1), n_states = 9
 
@@ -84,7 +84,7 @@ class kalman_filter():
         # X_pred = ...
         # P_pred = ...
 
-        return #X_pred, P_pred
+        return X_pred, P_pred
 
     def KF_sensor_fusion(self, X_pred, P_pred, H, R, Z):
         # Function that performs sensor fusion when a measurement is received
@@ -104,7 +104,7 @@ class kalman_filter():
         # self.X_opt = ...
         # self.P_opt = ...
 
-        return #self.X_opt, self.P_opt
+        return self.X_opt, self.P_opt
 
     def KF_estimate(self, measured_state_gps, measured_state_accel, dt_last_measurement, sensor_state_flag):
         # Function that outputs the state estimate wehn requested
@@ -132,10 +132,10 @@ class kalman_filter():
 
         # Example implementation structure for case of sensor_flag = 3
         # if sensor_state_flag == 3:
-        #     X_opt_gps, P_opt_gps = ... 
-        #     X_est, P_est = ... 
+        #     X_opt_gps, P_opt_gps = self.KF_sensor_fusion(X_prop, P_prop, self.H_GPS, self.R_GPS, measured_state_gps)
+        #     X_est, P_est = self.KF_sensor_fusion(X_opt_gps, P_opt_gps, self.H_ACCEL, self.R_ACCEL, measured_state_accel)
 
-        return #X_est, P_est
+        return X_est, P_est
     
     # --------------------------------------------------------- WORK ONLY UP TO HERE --------------------------------------------------------------------------------- #
 
@@ -304,7 +304,7 @@ class kalman_filter():
         ax[1].legend(['Noisy X','Noisy Y', 'Noisy Z','Ground truth X ','Ground truth Y','Ground truth Z'], fontsize = 10)
         ax[1].set_xlabel("Time (s)")
         ax[1].set_ylabel("Acceleration (m/s²)")
-        ax[1].set_ylim(-10,10)
+        ax[1].set_ylim(-5,5)
         plt.savefig("Comparison_pos_accel_truth_Noise.png")
 
         fig, ax = plt.subplots(1)
