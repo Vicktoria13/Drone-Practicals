@@ -8,6 +8,7 @@ import pandas as pd
 from PIL import Image
 
 class kalman_filter():
+    print("Kalman Filter Class")
     def __init__(self):
         self.noise_std_GPS = 0.2
         self.noise_std_ACCEL = 0.02
@@ -47,23 +48,40 @@ class kalman_filter():
     
     def initialize_KF(self, noise_std_GPS, noise_std_ACCEL):
         # Function to initialize the following:
-        #   Optimal state vector (self.X_opt) (DIM: n_states x 1)
-        #   Optimal prediction covariance (self.P_opt) (DIM: n_states x n_states)
-        #   Measurement Matrices for GPS and Accelerometer (self.H_GPS and self.H_ACCEL) (DIM: n_measurements x n_states)
-        #   Measurement Covariance Matrices (self.R_GPS and self.R_ACCEL) (DIM: n_measurements x n_states)
+        #   Optimal state vector (self.X_opt) (DIM: n_states x 1) 9x1
+        #   Optimal prediction covariance (self.P_opt) (DIM: n_states x n_states) 9x9
+        #   Measurement Matrices for GPS and Accelerometer (self.H_GPS and self.H_ACCEL) (DIM: n_measurements x n_states) (3x9)
+        #   Measurement Covariance Matrices (self.R_GPS and self.R_ACCEL) (DIM: n_measurements x n_measurements) (6x6)
+
+        # here n_states = 9
+        # here n_measurements = 6 (3 for GPS and 3 for Accelerometer)
 
         # IMPORTANT: Assume the state definition in the order: X = [x, v_x, a_x, y, v_y, a_y, z, v_z, a_z], Shape: (9,1), n_states = 9
 
         # YOUR CODE HERE
         # -----------------------------------
-        self.X_opt = None
-        self.P_opt = None
+        self.X_opt = np.random.rand(9,1) # on initialize randomly
+        
+        # p size is 9x9 ==> incertitude diagonal matrix
+        #we put high values at the beginning to have a high incertitude
+        #and thus only rely on the measurements
+        self.P_opt = np.diag([100, 100, 100, 100, 100, 100, 100, 100, 100])
 
-        self.H_GPS = None
-        self.H_ACCEL = None
+        #here, knowing that X = [x, v_x, a_x, y, v_y, a_y, z, v_z, a_z]
+        #thus, the H_GPS matrix is a 3x9 matrix
+        self.H_GPS = np.array([[1, 0, 0, 0, 0, 0, 0, 0, 0],
+                               [0, 0, 0, 1, 0, 0, 0, 0, 0],
+                               [0, 0, 0, 0, 0, 0, 1, 0, 0]])
+        
+        #here, knowing that X = [x, v_x, a_x, y, v_y, a_y, z, v_z, a_z]
+        #thus, the H_ACCEL matrix is a 3x9 matrix
+        self.H_ACCEL = np.array([[0, 0, 1, 0, 0, 0, 0, 0, 0],
+                                 [0, 0, 0, 0, 0, 1, 0, 0, 0],
+                                 [0, 0, 0, 0, 0, 0, 0, 0, 1]])
 
-        self.R_GPS = None
-        self.R_ACCEL = None
+
+        self.R_GPS = np.diag([noise_std_GPS, noise_std_GPS, noise_std_GPS])
+        self.R_ACCEL =  np.diag([noise_std_ACCEL, noise_std_ACCEL, noise_std_ACCEL])
 
     def KF_state_propagation(self, dt):
         # Function that propagates the last fused state over a time-interval dt
@@ -79,11 +97,35 @@ class kalman_filter():
         # YOUR CODE HERE
         # -----------------------------------
 
-        # A_trans = ...
+        #hyp : constant acceleration model
+        # A_trans shape is 9x9
+        # X(k+1) = A*X(k) 
+        # avec X(k) = [x, v_x, a_x, y, v_y, a_y, z, v_z, a_z]
+
+        # pos x(k+1) = pos x(k) + v_x(k)*dt + 0.5*a_x(k)*dt^2
+        # v_x(k+1) = v_x(k) + a_x(k)*dt
+        # a_x(k+1) = a_x(k)
+
+        A_trans = np.array([[1, dt, 0.5*dt**2, 0, 0, 0, 0, 0, 0],
+                            [0, 1, dt, 0, 0, 0, 0, 0, 0],
+                            [0, 0, 1, 0, 0, 0, 0, 0, 0],
+                            [0, 0, 0, 1, dt, 0.5*dt**2, 0, 0, 0],
+                            [0, 0, 0, 0, 1, dt, 0, 0, 0],
+                            [0, 0, 0, 0, 0, 1, 0, 0, 0],
+                            [0, 0, 0, 0, 0, 0, 1, dt, 0.5*dt**2],
+                            [0, 0, 0, 0, 0, 0, 0, 1, dt],
+                            [0, 0, 0, 0, 0, 0, 0, 0, 1]])
+        
 
         # X_pred = ...
         # P_pred = ...
 
+        #on propage l'état et la covariance
+        X_pred = A_trans @ self.X_opt
+
+        # P_pred = A*P*A^T + Q
+        P_pred = (A_trans @ self.P_opt) @ np.transpose(A_trans) + self.calculate_Q(dt, self.q_tr)
+        
         return X_pred, P_pred
 
     def KF_sensor_fusion(self, X_pred, P_pred, H, R, Z):
@@ -91,7 +133,7 @@ class kalman_filter():
         # Inputs:
         #   X_pred: State propagated to time of fusion (n_states x 1)
         #   P_pred: Covariance matrix propagated to time of fusion (n_states x n_states)
-        #   H: Measurement Matrix of measured sensor (n_measurements x n_states)
+        #   H: Measurement Matrix of measured sensor (n_measurements x n_states) ==> 3x9
         #   R: Measurement Covariance of measured sensor (n_measurements x n_states)
         #   Z: Measurement vector received from the sensor (n_measurements x 1)
         # Returns:
@@ -103,6 +145,20 @@ class kalman_filter():
         # K = ...
         # self.X_opt = ...
         # self.P_opt = ...
+
+        #H est une matrice de 3x9
+
+        print("size H in sensor fusion : ", H.shape)
+        K = P_pred @ np.transpose(H) @ np.linalg.inv(H @ P_pred @ np.transpose(H) + R)
+        print("size of R in sensor fusion : ", R.shape)
+
+        print("size K in sensor fusion : ", K.shape)
+        print("size z in sensor fusion : ", Z.shape)
+        self.X_opt = X_pred + K @ (Z - H @ X_pred)
+
+        print("size X_opt in sensor fusion : ", self.X_opt.shape)
+        self.P_opt = (np.eye(9) - K @ H) @ P_pred
+        print("size P_opt in sensor fusion : ", self.P_opt.shape)
 
         return self.X_opt, self.P_opt
 
@@ -127,6 +183,7 @@ class kalman_filter():
         # Calculate the propagated state from the last fused measurement
 
         # X_prop, P_prop = ...
+        X_prop, P_prop = self.KF_state_propagation(dt_last_measurement)
 
         # Implement your sensor fusion function calls dependent on measurement case (value of sensor_flag)
 
@@ -135,6 +192,30 @@ class kalman_filter():
         #     X_opt_gps, P_opt_gps = self.KF_sensor_fusion(X_prop, P_prop, self.H_GPS, self.R_GPS, measured_state_gps)
         #     X_est, P_est = self.KF_sensor_fusion(X_opt_gps, P_opt_gps, self.H_ACCEL, self.R_ACCEL, measured_state_accel)
 
+        #init
+        X_est = np.zeros((9,1))
+        P_est = np.zeros((9,9))
+        if sensor_state_flag ==0:
+            # aucune mesures reçues
+            X_est = X_prop
+            P_est = P_prop
+
+        elif sensor_state_flag == 1:
+            # Reçue une mesure GPS : donc on fusionne avec la prédiction de l'état
+            #def KF_sensor_fusion(self, X_pred, P_pred, H, R, Z):
+            #ici, la fonction prend H qui est de shape 3x9
+            X_est, P_est = self.KF_sensor_fusion(X_prop, P_prop, self.H_GPS, self.R_GPS, measured_state_gps)
+
+        elif sensor_state_flag == 2:
+            # Reçue une mesure d'accéléromètre : donc on fusionne avec la prédiction de l'état
+            X_est, P_est = self.KF_sensor_fusion(X_prop, P_prop, self.H_ACCEL, self.R_ACCEL, measured_state_accel)
+        
+        elif sensor_state_flag == 3:
+            # Reçue une mesure GPS et une mesure d'accéléromètre : donc on fusionne avec la prédiction de l'état
+            #cela revient a faire 2 fusions successives, et on propage sur 0 sec
+            X_opt_gps, P_opt_gps = self.KF_sensor_fusion(X_prop, P_prop, self.H_GPS, self.R_GPS, measured_state_gps)
+            X_est, P_est = self.KF_sensor_fusion(X_opt_gps, P_opt_gps, self.H_ACCEL, self.R_ACCEL, measured_state_accel)
+            
         return X_est, P_est
     
     # --------------------------------------------------------- WORK ONLY UP TO HERE --------------------------------------------------------------------------------- #
